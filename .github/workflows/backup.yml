@@ -1,0 +1,33 @@
+# RNF-11: cópia de segurança automática diária do banco, mantendo os últimos 30 dias.
+# Configure o segredo SUPABASE_DB_URL no repositório (Settings → Secrets → Actions) com a
+# connection string do Postgres do Supabase (Project Settings → Database → Connection string, modo "Session").
+name: Backup diário do banco
+
+on:
+  schedule:
+    - cron: '0 6 * * *' # 03:00 em Brasília
+  workflow_dispatch:
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Instalar cliente PostgreSQL
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq postgresql-client
+
+      - name: Gerar cópia
+        env:
+          DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+        run: |
+          ARQ="backup-$(date -u +%Y-%m-%d).sql.gz"
+          pg_dump "$DB_URL" --no-owner --no-privileges --schema=public --schema=auth | gzip > "$ARQ"
+          echo "ARQ=$ARQ" >> "$GITHUB_ENV"
+
+      - name: Guardar por 30 dias
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.ARQ }}
+          path: ${{ env.ARQ }}
+          retention-days: 30
